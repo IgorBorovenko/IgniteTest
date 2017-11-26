@@ -48,6 +48,7 @@ namespace IgniteTest
                 cacheConfiguration.WriteSynchronizationMode = CacheWriteSynchronizationMode.FullSync;
 
                 var cache = ignite.GetOrCreateCache<int, Person>(cacheConfiguration);
+                cache.Clear();
 
                 if (!cache.Any())
                     UploadData(cache);
@@ -63,19 +64,26 @@ namespace IgniteTest
 
         private static void TestPerformance(ICache<int, Person> cache)
         {
-            for (int j = 0; j < 10; j++)
+            var persons = cache.AsCacheQueryable();
+            var igniteQuery = CompiledQuery.Compile(() => persons.Where(x => x.Value.Name.Contains("ey"))
+                .GroupBy(x => x.Value.Name)
+                .Select(g => new Tuple<string, double>(g.Key, g.Min(x => x.Value.SalaryReceived))));
+
+            for (var j = 0; j < 10; j++)
             {
                 var sw = Stopwatch.StartNew();
                 
                 if (_personsList.Any())
                 {
-                    var avgSalaryLinq = _personsList.GroupBy(x => x.Name).Select(g => new Tuple<string, double>(g.Key, g.Average(x => x.SalaryReceived))).ToList();
+                    var avgSalaryLinq = _personsList.Where(x => x.Name.Contains("ey"))
+                        .GroupBy(x => x.Name)
+                        .Select(g => new Tuple<string, double>(g.Key, g.Min(x => x.SalaryReceived)))
+                        .ToList();
                     Console.WriteLine($"LINQ calculated in {sw.Elapsed}");
                 }
                 
                 sw.Restart();
-                var persons = cache.AsCacheQueryable();
-                var avgSalaryIgnite = persons.GroupBy(x => x.Value.Name).Select(g => new Tuple<string, double>(g.Key, g.Average(x => x.Value.SalaryReceived))).ToList();
+                var avgSalaryIgnite = igniteQuery().GetAll();
                 Console.WriteLine($"Ignite calculated in {sw.Elapsed}");
                 Console.WriteLine($"persons.Count == {persons.Count().ToString("#,#", CultureInfo.InvariantCulture)}");
 
@@ -85,62 +93,75 @@ namespace IgniteTest
 
         private static void UploadData(ICache<int, Person> cache)
         {
-            Console.WriteLine("Uploading data...");
-            var i = 0;
-            while (i < 10000000)
+            using (var streamer = cache.Ignite.GetDataStreamer<int, Person>("persons"))
             {
-                var person = new Person { Name = "Andrey K", SalaryReceived = new Random().Next(10000) };
-                cache.PutIfAbsent(i, person);
-                _personsList.Add(person);
-                i++;
+                Console.WriteLine("Uploading data...");
+                var i = 0;
+                while (i < 10000000)
+                {
+                    var person = new Person { Name = "Andrey K", SalaryReceived = new Random().Next(10000) };
+                    //cache.PutIfAbsent(i, person);
+                    streamer.AddData(i, person);
+                    _personsList.Add(person);
+                    i++;
 
-                person = new Person { Name = "Sergey R", SalaryReceived = new Random().Next(1000) };
-                cache.PutIfAbsent(i, person);
-                _personsList.Add(person);
-                i++;
+                    person = new Person { Name = "Sergey R", SalaryReceived = new Random().Next(1000) };
+                    //cache.PutIfAbsent(i, person);
+                    streamer.AddData(i, person);
+                    _personsList.Add(person);
+                    i++;
 
-                person = new Person { Name = "Oleg K", SalaryReceived = new Random().Next(1000) };
-                cache.PutIfAbsent(i, person);
-                _personsList.Add(person);
-                i++;
+                    person = new Person { Name = "Oleg K", SalaryReceived = new Random().Next(1000) };
+                    //cache.PutIfAbsent(i, person);
+                    streamer.AddData(i, person);
+                    _personsList.Add(person);
+                    i++;
 
-                person = new Person { Name = "Igor B", SalaryReceived = new Random().Next(1000) };
-                cache.PutIfAbsent(i, person);
-                _personsList.Add(person);
-                i++;
+                    person = new Person { Name = "Igor B", SalaryReceived = new Random().Next(1000) };
+                    //cache.PutIfAbsent(i, person);
+                    streamer.AddData(i, person);
+                    _personsList.Add(person);
+                    i++;
 
-                person = new Person { Name = "Alexey M", SalaryReceived = new Random().Next(1000) };
-                cache.PutIfAbsent(i, person);
-                _personsList.Add(person);
-                i++;
+                    person = new Person { Name = "Alexey M", SalaryReceived = new Random().Next(1000) };
+                    //cache.PutIfAbsent(i, person);
+                    streamer.AddData(i, person);
+                    _personsList.Add(person);
+                    i++;
 
-                person = new Person { Name = "Igor P", SalaryReceived = new Random().Next(1000) };
-                cache.PutIfAbsent(i, person);
-                _personsList.Add(person);
-                i++;
+                    person = new Person { Name = "Igor P", SalaryReceived = new Random().Next(1000) };
+                    //cache.PutIfAbsent(i, person);
+                    streamer.AddData(i, person);
+                    _personsList.Add(person);
+                    i++;
 
-                person = new Person { Name = "Alexey Z", SalaryReceived = new Random().Next(100) };
-                cache.PutIfAbsent(i, person);
-                _personsList.Add(person);
-                i++;
+                    person = new Person { Name = "Alexey Z", SalaryReceived = new Random().Next(100) };
+                    //cache.PutIfAbsent(i, person);
+                    streamer.AddData(i, person);
+                    _personsList.Add(person);
+                    i++;
 
-                person = new Person { Name = "Marianne B", SalaryReceived = new Random().Next(100000) };
-                cache.PutIfAbsent(i, person);
-                _personsList.Add(person);
-                i++;
+                    person = new Person { Name = "Marianne B", SalaryReceived = new Random().Next(100000) };
+                    //cache.PutIfAbsent(i, person);
+                    streamer.AddData(i, person);
+                    _personsList.Add(person);
+                    i++;
 
-                person = new Person { Name = "Nikolaj D", SalaryReceived = new Random().Next(1000000) };
-                cache.PutIfAbsent(i, person);
-                _personsList.Add(person);
-                i++;
+                    person = new Person { Name = "Nikolaj D", SalaryReceived = new Random().Next(1000000) };
+                    //cache.PutIfAbsent(i, person);
+                    streamer.AddData(i, person);
+                    _personsList.Add(person);
+                    i++;
 
-                person = new Person { Name = "Tais C", SalaryReceived = new Random().Next(1000000) };
-                cache.PutIfAbsent(i, person);
-                _personsList.Add(person);
-                i++;
+                    person = new Person { Name = "Tais C", SalaryReceived = new Random().Next(1000000) };
+                    //cache.PutIfAbsent(i, person);
+                    streamer.AddData(i, person);
+                    _personsList.Add(person);
+                    i++;
 
-                if (i % 1000000 == 0)
-                    Console.WriteLine($"{i.ToString("#,#", CultureInfo.InvariantCulture)}...");
+                    if (i % 1000000 == 0)
+                        Console.WriteLine($"{i.ToString("#,#", CultureInfo.InvariantCulture)}...");
+                }
             }
         }
     }
